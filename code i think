@@ -1,0 +1,108 @@
+using Discord;
+using Discord.Commands;
+using Discord.WebSocket;
+using System;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Threading.Tasks;
+
+class Program
+{
+    private DiscordSocketClient _client;
+    private CommandService _commands;
+    private IServiceProvider _services;
+
+    static void Main(string[] args) => new Program().RunBotAsync().GetAwaiter().GetResult();
+
+    public async Task RunBotAsync()
+    {
+        _client = new DiscordSocketClient();
+        _commands = new CommandService();
+
+        _client.Log += Log;
+
+        await RegisterCommandsAsync();
+
+        await _client.LoginAsync(TokenType.Bot, "MTA3OTU3NjY5NzAwMDcwMTk3Mg.GgoKyC.7V14QFJAUDdxH4xggWAC53fN9l3pOk7U9JbvSE");
+        await _client.StartAsync();
+
+        await Task.Delay(-1);
+    }
+
+    private Task Log(LogMessage arg)
+    {
+        Console.WriteLine(arg);
+        return Task.CompletedTask;
+    }
+
+    public async Task RegisterCommandsAsync()
+    {
+        _client.MessageReceived += HandleCommandAsync;
+
+        await _commands.AddModulesAsync(Assembly.GetEntryAssembly(), _services);
+    }
+
+    private async Task HandleCommandAsync(SocketMessage arg)
+    {
+        var message = arg as SocketUserMessage;
+        var context = new SocketCommandContext(_client, message);
+        if (message.Author.IsBot) return;
+
+        int argPos = 0;
+        if (message.HasStringPrefix("/", ref argPos))
+        {
+            var result = await _commands.ExecuteAsync(context, argPos, _services);
+            if (!result.IsSuccess)
+                Console.WriteLine(result.ErrorReason);
+        }
+    }
+}
+
+public class Commands : ModuleBase<SocketCommandContext>
+{
+    [Command("txt")]
+    public async Task TxtCommand(string filePath)
+    {
+        try
+        {
+            string content = File.ReadAllText(filePath);
+            await ReplyAsync($"```{content}```");
+        }
+        catch (Exception ex)
+        {
+            await ReplyAsync($"Error: {ex.Message}");
+        }
+    }
+
+    [Command("image")]
+    public async Task ImageCommand(string imageUrl)
+    {
+        var embed = new EmbedBuilder();
+        embed.WithImageUrl(imageUrl);
+        await ReplyAsync("", false, embed.Build());
+    }
+
+    [Command("pdf")]
+    public async Task PdfCommand(string pdfUrl)
+    {
+        var embed = new EmbedBuilder();
+        embed.WithImageUrl(pdfUrl);
+        await ReplyAsync("", false, embed.Build());
+    }
+
+    [Command("roll")]
+    public async Task RollCommand(int sides, int times)
+    {
+        var random = new Random();
+        var rolls = Enumerable.Range(1, times).Select(_ => random.Next(1, sides + 1));
+        await ReplyAsync($"Rolls: {string.Join(", ", rolls)}");
+    }
+
+    [Command("flip")]
+    public async Task FlipCommand()
+    {
+        var result = (new Random().Next(0, 2) == 0) ? "Heads" : "Tails";
+        await ReplyAsync($"Coin Flip: {result}");
+    }
+}
